@@ -1,0 +1,41 @@
+urdf_path: "./ur5_wsg_gripper.urdf"
+srdf_path: "./ur5.srdf"
+joint_stiffness: 1000
+joint_damping: 200
+gripper_stiffnes: 1000
+gripper_damping: 200
+move_group: ["ee_link","ee_link"]
+ee_joints: ["ee_fixed_joint","ee_fixed_joint"]
+arm_joints_name: [["shoulder_pan_joint" ,"shoulder_lift_joint" ,"elbow_joint" ,"wrist_1_joint", "wrist_2_joint", "wrist_3_joint"],
+                  ["shoulder_pan_joint" ,"shoulder_lift_joint" ,"elbow_joint" ,"wrist_1_joint", "wrist_2_joint", "wrist_3_joint"]]
+# gripper_name: [["robotiq_85_left_knuckle_joint", "robotiq_85_right_knuckle_joint"],
+              #  ["robotiq_85_left_knuckle_joint", "robotiq_85_right_knuckle_joint"]]
+gripper_name:
+  - base: "base_joint_gripper_left"
+    mimic: [["base_joint_gripper_right", -1., 0.]]
+  - base: "base_joint_gripper_left"
+    mimic: [["base_joint_gripper_right", -1., 0.]]
+gripper_bias: 0.11
+gripper_scale: [0.01, -0.06]
+homestate: [[-1.5447, -1.5447, -1.5447, -1.5794, 1.5794, 0],
+            [-1.5447, -1.5447, -1.5447, -1.5794, 1.5794, 0]]
+delta_matrix: [[1,0,0],[0,1,0],[0,0,1]]
+global_trans_matrix: [[1,0,0],[0,-1,0],[0,0,-1]]
+robot_pose: [[0, -0.65, 0.65, 1, 0, 0, 0],[0, -0.65, 0.75, 1, 0, 0, 0]]   # modify
+planner: "curobo"
+dual_arm: False
+fix_gripper_name: ["finger_left", "finger_right"]
+static_camera_list:
+- name: head_camera
+  position:
+  - -0.032
+  - -0.45
+  - 1.35
+  forward:
+  - 0
+  - 0.6
+  - -0.8
+  left:
+  - -1
+  - 0
+  - 0

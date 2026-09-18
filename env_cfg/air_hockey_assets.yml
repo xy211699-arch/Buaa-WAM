@@ -1,0 +1,70 @@
+# Parametric SAPIEN assets. All lengths are metres, masses kilograms.
+# Dimensions and material coefficients marked provisional must be replaced
+# with the user's measurements and calibrated puck trajectories before data collection.
+provisional: true
+source: https://github.com/AirHockeyChallenge/air_hockey_challenge/blob/qualifying-2025/air_hockey_challenge/environments/data/table.xml
+
+physics:
+  timestep_s: 0.001             # original challenge scene; smaller than RoboTwin's 0.004 s default
+  bounce_threshold_m_s: 0.1    # SAPIEN/PhysX default 2 m/s suppresses normal-speed rail rebound
+
+interaction:
+  max_physics_steps_per_frame: 32
+  keyboard_impulse_Ns: 0.012        # 0.01 kg puck: about 1.2 m/s per key press
+
+grasp:
+  finger_closed_target_m: 0.043
+  finger_drive_stiffness_N_m: 1000
+  finger_drive_damping_Ns_m: 100
+  finger_force_limit_N: 50
+  finger_static_friction: 2.0      # provisional contact tuning for the bundled WSG mesh
+  finger_dynamic_friction: 1.5
+  finger_restitution: 0.05
+  settle_steps: 400
+
+table:
+  length_m: 2.128             # source surface box: 2 * 1.064
+  width_m: 1.218              # source surface box: 2 * 0.609
+  top_height_m: 0.74          # RoboTwin workbench height; provisional
+  thickness_m: 0.101         # source surface box: 2 * 0.0505
+  rail_width_m: 0.045        # provisional simplified rail
+  rail_height_m: 0.03        # provisional simplified rail
+  goal_width_m: 0.40         # provisional opening at each short end
+  leg_width_m: 0.06          # provisional support legs
+  surface_static_friction: 0.02
+  surface_dynamic_friction: 0.02
+  surface_restitution: 0.1
+  rail_static_friction: 0.15
+  rail_dynamic_friction: 0.1
+  rail_restitution: 0.8
+
+puck:
+  diameter_m: 0.0633         # source cylinder radius 0.03165
+  thickness_m: 0.02          # source cylinder half-height 0.01
+  mass_kg: 0.01              # source inertial mass
+  inertia_kg_m2: [0.0000025, 0.0000025, 0.000005]  # source diagonal inertia
+  start_clearance_m: 0.0005
+  static_friction: 0.02
+  dynamic_friction: 0.02
+  restitution: 0.6
+  linear_damping: 0.005       # provisional SAPIEN tuning value
+  angular_damping: 0.000002  # provisional SAPIEN tuning value
+
+striker:
+  diameter_m: 0.0963         # source iiwa striker collision diameter
+  thickness_m: 0.06          # source iiwa striker collision thickness
+  mass_kg: 0.283             # source iiwa striker mass; provisional for new shape
+  static_friction: 0.4
+  dynamic_friction: 0.3
+  restitution: 0.6
+
+robot_preview:
+  urdf_path: assets/embodiments/ur5-wsg/ur5_wsg_gripper.urdf
+  ee_link_name: ee_link
+  arm_joint_names: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint]
+  # IK solution: gripper frames start 0.214 m inside each goal, 0.16 m above the table.
+  home_qpos: [-2.870323, -1.575986, -2.332224, -0.801947, 1.615170, 0.245035, -0.0549, 0.0549]
+  shoulder_pan_limits_rad: [-6.283185307, 6.283185307]  # UR5 official ±360°; bundled URDF says ±180°
+  base_offset_from_end_m: 0.18  # provisional; base centers are behind each short table end
+  stand_length_m: 0.24
+  stand_width_m: 0.24

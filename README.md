@@ -15,6 +15,23 @@ https://private-user-images.githubusercontent.com/88101805/463126988-e3ba1575-44
 
 </details>
 
+# BUAA WAM air hockey scene
+
+This fork includes a two-UR5 air hockey preview, the table/puck/striker definitions,
+interaction controls, tests, and the UR5-WSG model needed to run the preview.
+See [the scene guide](docs/air_hockey_assets.md) for controls and parameters.
+
+```bash
+python scripts/preview_air_hockey_assets.py
+```
+
+The other RoboTwin assets and datasets are not stored in this repository. Follow
+the upstream asset download instructions below to run the remaining benchmark tasks.
+Clone with `--recurse-submodules` to obtain XPolicyLab.
+Before using the full RoboTwin CuRobo planner, run
+`python scripts/update_embodiment_config_path.py` from the repository root to
+generate machine-specific embodiment paths from the included templates.
+
 # 📚 Overview
 
 > Prefer the [RoboTwin Document](https://robotwin-platform.github.io/doc/) for full guides — this README is a quick start.
