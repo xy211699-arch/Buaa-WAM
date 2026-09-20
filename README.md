@@ -313,3 +313,595 @@ Contact [Tianxing Chen](https://tianxingchen.github.io) if you have any question
 
 # 🏷️ License
 This repository is released under the MIT license. See [LICENSE](./LICENSE) for additional details.
+
+---
+
+## Air Hockey V2: DEFEND + HIT + RGB Data Collection
+
+### Overview
+
+The current air-hockey branch validates a complete minimum pipeline from an
+incoming puck to a recorded expert demonstration.
+
+Current pipeline:
+
+    automatic random inbound puck
+    -> DEFEND prediction
+    -> Cartesian goalie motion
+    -> physical puck/striker contact
+    -> read actual post-contact puck state
+    -> HIT preparation
+    -> candidate forward simulation
+    -> best candidate selection
+    -> restore search seed
+    -> execute selected HIT
+    -> puck flight
+    -> synchronized RGB/state recording
+    -> episode termination
+
+The current milestone is intended to validate the algorithm and data-collection
+architecture before large-scale WAM training or real-robot deployment.
+
+### Current validated status
+
+The following components have been validated:
+
+- two-UR5 air-hockey simulation scene
+- SAPIEN/PhysX puck state access
+- 2D DEFEND intercept prediction
+- Cartesian goalie motion on the defensive line
+- physical striker/puck contact
+- actual post-contact puck-state observation
+- DEFEND -> HIT_READY phase transition
+- stable HIT preparation state
+- simulator snapshot / restore
+- 20-candidate HIT forward search
+- best-candidate selection
+- search-to-live replay consistency
+- end-effector-following kinematic striker
+- standalone RGB camera capture
+- continuous episode RGB recording
+- synchronized robot/state recording
+- planner timeline isolation
+- automatic random inbound episodes
+
+Detailed validation notes:
+
+    docs/2026-09-20_air_hockey_validation_summary.md
+
+### Recommended entry point
+
+The current end-to-end validation entry point is:
+
+    scripts/collect_episode_rgb_auto_v1.py
+
+Run one deterministic automatic episode:
+
+    cd ~/Buaa-WAM
+    conda activate RoboTwin
+    python scripts/collect_episode_rgb_auto_v1.py --duration 0 --seed 1
+
+Another random seed can be selected with:
+
+    python scripts/collect_episode_rgb_auto_v1.py --duration 0 --seed 4
+
+No manual puck impulse is required.
+
+### Episode execution
+
+The automatic collector performs:
+
+    random puck initialization
+    -> DEFEND
+    -> CONTACT_HOLD
+    -> HIT_READY
+    -> HIT_PREP
+    -> planner candidate search
+    -> restore planner seed
+    -> HIT_EXECUTE
+    -> FLIGHT
+    -> terminal event
+
+The planner currently evaluates 20 HIT candidates generated from multiple
+angle offsets and striker speeds.
+
+### RGB and synchronized state recording
+
+RGB is currently recorded at:
+
+    resolution: 640 x 360
+    rate:       30 FPS
+
+Each recorded frame can include:
+
+- RGB image
+- simulation episode time
+- control phase
+- left robot q / dq
+- right robot q / dq
+- left TCP pose
+- left joint drive target
+- puck ground-truth pose
+- puck ground-truth velocity
+- left striker pose
+
+Episode output is written under:
+
+    outputs/episode_rgb_v1/
+
+Typical layout:
+
+    outputs/episode_rgb_v1/episode_YYYYMMDD_HHMMSS/
+        rgb/
+            000000.png
+            000001.png
+            ...
+        frames.jsonl
+        meta.json
+
+Generated datasets are intentionally excluded from Git.
+
+### Planner timeline isolation
+
+Candidate forward simulation is not part of the continuous expert
+demonstration.
+
+The recorded demonstration timeline contains:
+
+    DEFEND
+    CONTACT_HOLD
+    HIT_PREP
+    HIT_EXECUTE
+    FLIGHT
+
+Internal planner operations are excluded:
+
+    snapshot validation
+    candidate 01
+    candidate 02
+    ...
+    candidate 20
+
+During candidate search:
+
+- RGB recording is paused.
+- demonstration episode time is paused.
+- internal simulator physics steps are counted separately.
+- simulator state may be repeatedly restored.
+
+After planning:
+
+- the stable search seed is restored.
+- the recorder resumes.
+- only the selected BEST execution is written into the expert episode.
+
+This prevents planner branch resets from appearing as visual teleportation in
+the training trajectory.
+
+### Kinematic striker follower
+
+The first physical implementation relied on friction between the WSG gripper
+and a dynamic striker.
+
+That approach was unstable during repeated forward simulations.
+
+The current validation version therefore uses:
+
+    UR5 IK / joint drive
+        -> end-effector pose
+        -> fixed EE-to-striker transform
+        -> kinematic striker target
+        -> physical collision with dynamic puck
+
+The robot still performs real simulated joint motion.
+
+The striker is kinematically synchronized with the end effector so that
+gripper-slip artifacts do not invalidate HIT planning experiments.
+
+### Validation scripts
+
+The files under:
+
+    scripts/validate_*.py
+
+are incremental validation programs used during development.
+
+They cover:
+
+- puck state
+- DEFEND prediction
+- Cartesian DEFEND control
+- DEFEND phase transitions
+- snapshot / restore
+- HIT candidate search
+- best-candidate execution
+- goal-event logic
+- kinematic striker following
+- RGB camera capture
+- episode RGB collection
+
+These scripts are intended for debugging and regression validation.
+
+For normal end-to-end testing, use:
+
+    scripts/collect_episode_rgb_auto_v1.py
+
+### Scene-only preview
+
+To inspect the original two-UR5 air-hockey simulation without running the
+DEFEND/HIT algorithm:
+
+    python scripts/preview_air_hockey_assets.py
+
+
+## Air Hockey Technical Roadmap
+
+The project is intentionally developed in stages.
+
+The current V2 milestone proves the minimum closed simulation pipeline.
+The next milestones focus first on producing reliable expert data, then on
+learning from that data, and finally on transferring the learned controller to
+a real robot.
+
+### Stage 0 - Simulation and algorithm baseline
+
+Status: validated.
+
+Goals:
+
+- build the two-robot air-hockey scene
+- expose puck state from SAPIEN/PhysX
+- implement DEFEND
+- detect real puck/striker contact
+- use actual post-contact puck state
+- implement HIT candidate forward simulation
+- restore simulator state between candidates
+- select and replay the best HIT
+- record RGB and robot state
+- separate planner simulation from demonstration time
+
+This stage corresponds to the current V2 implementation.
+
+
+### Stage 1 - Production-quality episode collector
+
+The current collector validates the architecture, but it is not yet the final
+large-scale data-production system.
+
+Next work:
+
+- remove validation-only perturbation tests from the production collector
+- implement deterministic episode reset
+- support many episodes in one process
+- automatically recover from failed episodes
+- save episode-level metadata and random seeds
+- finalize terminal conditions
+- finalize camera placement and calibration conventions
+- add TCP velocity
+- define the final action representation
+- add dataset integrity checks
+- verify RGB/state/action synchronization
+- verify that no planner frames enter the demonstration timeline
+
+A production episode should have a clean structure:
+
+    reset
+    -> randomized puck state
+    -> DEFEND
+    -> contact
+    -> HIT_PREP
+    -> internal planner search
+    -> BEST execution
+    -> flight
+    -> terminal event
+    -> save metadata
+    -> reset
+
+Exit criterion:
+
+The collector should be able to generate a large set of episodes
+automatically without manual interaction or timeline corruption.
+
+
+### Stage 2 - Finalize simulation physics and task geometry
+
+The current milestone intentionally focused on the basic control and
+data-collection flow.
+
+Before creating the final training dataset, simulation physics should be
+cleaned up.
+
+Important work:
+
+- finalize side-wall restitution
+- finalize rail friction
+- validate oblique puck-wall collision
+- validate multi-bounce trajectories
+- finalize physical goal opening geometry
+- define precise goal / miss / timeout events
+- verify puck radius and legal goal-center region
+- verify striker/puck collision parameters
+- verify table coordinate conventions
+
+The task distribution should then expand gradually from simple direct incoming
+shots to wall-bounce trajectories.
+
+Recommended curriculum:
+
+    direct inbound trajectories
+    -> shallow-angle trajectories
+    -> single-wall bounce
+    -> larger angle distribution
+    -> multi-bounce / harder states
+
+
+### Stage 3 - Expert demonstration dataset
+
+The simulator planner acts as a privileged expert.
+
+The planner may use simulator ground-truth state internally:
+
+- puck position
+- puck velocity
+- collision state
+- forward simulation
+- candidate scores
+
+However, this privileged information should not be required by the deployed
+learned policy.
+
+The main learning trajectory should therefore be organized around:
+
+    observation:
+        RGB history
+        + robot proprioception
+
+    target:
+        future robot action chunk
+
+Puck ground-truth state should be treated as:
+
+    privileged training/debug information
+
+rather than as a required deployment input.
+
+Candidate planner branches should remain outside the continuous expert
+trajectory.
+
+Conceptually:
+
+    privileged simulator planner
+        -> candidate forward search
+        -> selected BEST behavior
+        -> continuous expert demonstration
+        -> learned WAM / policy
+
+Dataset work should include:
+
+- many randomized puck initial states
+- reproducible random seeds
+- train / validation / test splits
+- episode success metadata
+- phase metadata
+- camera calibration metadata
+- robot configuration metadata
+- action timestamps
+- optional privileged puck labels for analysis
+
+
+### Stage 4 - Final action representation
+
+The current recorder stores joint drive targets for validation.
+
+Before training the final model, the action definition should be chosen to
+match the desired deployment controller.
+
+Candidate action spaces include:
+
+- joint position targets
+- joint velocity targets
+- TCP position deltas
+- TCP velocity commands
+- future Cartesian waypoint chunks
+
+For the planned WAM-style controller, the preferred direction is:
+
+    image history
+    + robot proprioception
+        ->
+    future action chunk
+
+The final representation should be kept identical between:
+
+- dataset generation
+- policy training
+- simulation inference
+- real-robot deployment
+
+This prevents an unnecessary action-space conversion layer during sim-to-real.
+
+
+### Stage 5 - WAM / visuomotor policy training
+
+The learning system should consume only information that can be available at
+deployment time.
+
+Primary model input:
+
+    RGB image history
+    + robot proprioception
+
+Possible proprioception:
+
+- q
+- dq
+- TCP pose
+- TCP velocity
+
+Primary model output:
+
+    future robot action chunk
+
+Puck ground truth remains optional privileged information for:
+
+- diagnostics
+- auxiliary losses
+- offline analysis
+- planner supervision
+
+but should not be required for normal inference.
+
+The first training objective is not to outperform the simulator planner.
+
+The initial objective is to imitate the selected expert behavior reliably.
+
+
+### Stage 6 - Closed-loop simulation evaluation
+
+After offline training, the learned controller must be returned to the
+simulator and evaluated without using planner ground truth for control.
+
+Closed-loop evaluation should measure at least:
+
+- successful DEFEND rate
+- contact rate
+- HIT completion rate
+- goal rate
+- miss distribution
+- action smoothness
+- striker tracking
+- robot joint-limit violations
+- collisions
+- inference latency
+- episode stability
+
+The learned policy should be evaluated on states not used during training.
+
+This stage determines whether the model actually learned a closed-loop visual
+control policy rather than merely fitting recorded trajectories.
+
+
+### Stage 7 - Robustness and domain randomization
+
+After the base learned controller works in simulation, increase variability.
+
+Possible randomization:
+
+- puck initial state
+- table friction
+- puck friction
+- restitution
+- striker collision parameters
+- lighting
+- camera exposure
+- camera pose perturbation
+- visual textures
+- small robot calibration offsets
+- control latency
+- observation latency
+
+Randomization should be introduced progressively.
+
+The purpose is to reduce sensitivity to simulator-specific details before
+real-robot deployment.
+
+
+### Stage 8 - AUBO sim-to-real preparation
+
+Real deployment should begin only after the learned controller is stable in
+closed-loop simulation.
+
+Required real-system work:
+
+- AUBO kinematic model
+- AUBO joint limits
+- AUBO controller interface
+- table-to-robot coordinate calibration
+- camera intrinsic calibration
+- camera extrinsic calibration
+- end-effector-to-striker transform calibration
+- real puck / striker geometry measurements
+- controller frequency validation
+- observation latency measurement
+- action latency measurement
+- emergency stop
+- workspace limits
+- velocity / acceleration limits
+
+The same logical controller interface should be preserved:
+
+    RGB history
+    + robot proprioception
+        ->
+    future action chunk
+
+
+### Stage 9 - Progressive real-robot deployment
+
+Real deployment should be incremental.
+
+Recommended sequence:
+
+    1. robot moves without puck
+    2. replay low-speed simulated trajectories
+    3. verify coordinate calibration
+    4. static puck positioning
+    5. slow incoming puck
+    6. DEFEND only
+    7. controlled HIT
+    8. full DEFEND + HIT
+    9. faster and more varied puck trajectories
+
+At every stage, safety limits remain outside the learned policy.
+
+
+### Overall architecture
+
+The intended final architecture is:
+
+    SAPIEN / RoboTwin simulator
+            |
+            v
+    privileged expert planner
+            |
+            v
+    continuous RGB + proprio + action dataset
+            |
+            v
+    WAM / visuomotor policy
+            |
+            v
+    closed-loop simulation evaluation
+            |
+            v
+    robustness / domain randomization
+            |
+            v
+    AUBO real-robot deployment
+
+
+### Current project boundary
+
+The current repository state proves:
+
+    DEFEND + HIT algorithm path works
+    planner forward search works
+    search seed restore works
+    RGB data collection works
+    planner timeline isolation works
+    automatic single episodes work
+
+The next engineering milestone is therefore not another algorithm prototype.
+
+The next milestone is:
+
+    production-quality multi-episode expert data collection
+
+followed by:
+
+    WAM training and closed-loop simulation evaluation
+
+and only after that:
+
+    AUBO sim-to-real deployment
+
