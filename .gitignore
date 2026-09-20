@@ -30,3 +30,8 @@ envs/curobo/*
 
 /*.json*
 /*.txt
+outputs/
+*.pyc
+*.mp4
+*.jsonl
+*.bak
