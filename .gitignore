@@ -35,3 +35,10 @@ outputs/
 *.mp4
 *.jsonl
 *.bak
+
+# BUAA-WAM air-hockey generated artifacts
+outputs/episode_rgb_v1/
+outputs/direct_planner_stage5_v1_5/
+outputs/direct_planner_stage5_v1_5_parallel/
+outputs/**/*.mp4
+*.log
