@@ -87,11 +87,15 @@ def get_all_cluttered_objects():
     return cluttered_objects_info, cluttered_objects_name, same_obj
 
 
-cluttered_objects_info, cluttered_objects_list, same_obj = get_all_cluttered_objects()
+# Tasks with procedural geometry do not require the optional Objaverse assets.
+# Load this catalog only when a task actually requests clutter.
+cluttered_objects_info = cluttered_objects_list = same_obj = None
 
 
 def get_available_cluttered_objects(entity_on_scene: list):
     global cluttered_objects_info, cluttered_objects_list, same_obj
+    if cluttered_objects_info is None:
+        cluttered_objects_info, cluttered_objects_list, same_obj = get_all_cluttered_objects()
 
     model_in_use = []
     for entity_name in entity_on_scene:

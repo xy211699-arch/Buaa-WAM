@@ -1,0 +1,38 @@
+# Finalized task: randomized serve -> left hit -> right hit -> +1 second.
+# Change episode_num to the desired TOTAL count; the official collector resumes.
+render_freq: 0
+episode_num: 1
+use_seed: false
+save_freq: 30
+embodiment: [ur5-wsg, ur5-wsg, 0]
+language_num: 10
+eval_instruction: seen
+domain_randomization:
+  random_background: false
+  cluttered_table: false
+  clean_background_rate: 1
+  random_head_camera_dis: 0
+  random_table_height: 0
+  random_light: false
+  crazy_random_light_rate: 0
+camera:
+  head_camera_type: D435
+  wrist_camera_type: D435
+  collect_head_camera: true
+  collect_wrist_camera: false
+data_type:
+  rgb: true
+  third_view: false
+  depth: false
+  pointcloud: false
+  observer: false
+  endpose: true
+  qpos: true
+  mesh_segmentation: false
+  actor_segmentation: false
+save_path: ./data
+clear_cache_freq: 5
+collect_data: true
+air_hockey_config: env_cfg/air_hockey_assets.yml
+expert_coarse_only: true
+expert_verify: false

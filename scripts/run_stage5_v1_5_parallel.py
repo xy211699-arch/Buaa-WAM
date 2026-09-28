@@ -133,6 +133,7 @@ def run_one(
                     "serve_angle_deg": serve.get("angle_deg"),
                     "predicted_event": best.get("event"),
                     "actual_event": summary.get("actual_event"),
+                    "episode_success": summary.get("episode_success", summary.get("actual_event") == "RIGHT_RETURN"),
                     "contact_time": best.get("contact_time"),
                     "contact_x": best.get("contact_x"),
                     "contact_y": best.get("contact_y"),
@@ -355,6 +356,7 @@ def main():
         "serve_angle_deg",
         "predicted_event",
         "actual_event",
+        "episode_success",
         "contact_time",
         "contact_x",
         "contact_y",
@@ -387,10 +389,10 @@ def main():
         for r in results
         if r.get("returncode") == 0
     )
-    goals = sum(
+    returns = sum(
         1
         for r in results
-        if r.get("actual_event") == "GOAL"
+        if r.get("episode_success")
     )
 
     print("")
@@ -398,7 +400,7 @@ def main():
     print("PARALLEL RUN FINISHED")
     print("======================================================")
     print(f"successful processes : {ok}/{len(results)}")
-    print(f"actual GOAL episodes : {goals}/{len(results)}")
+    print(f"dual-arm returns     : {returns}/{len(results)}")
     print(f"results CSV          : {csv_path}")
     print(f"per-seed logs        : {logs_dir}")
     print("======================================================")

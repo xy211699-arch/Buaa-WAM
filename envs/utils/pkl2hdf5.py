@@ -175,13 +175,16 @@ def pkl_files_to_hdf5_and_video(
     *,
     instructions=None,
     frequency=15,
+    video_frames=None,
+    video_fps=30.0,
 ):
     data_list = parse_dict_structure(load_pkl_file(pkl_files[0]))
     for pkl_file_path in pkl_files:
         pkl_file = load_pkl_file(pkl_file_path)
         append_data_to_structure(data_list, pkl_file)
 
-    images_to_video(np.array(data_list["observation"]["head_camera"]["rgb"]), out_path=video_path)
+    frames = data_list["observation"]["head_camera"]["rgb"] if video_frames is None else video_frames
+    images_to_video(np.asarray(frames), out_path=video_path, fps=video_fps)
     return create_xpolicylab_hdf5(data_list, hdf5_path, instructions, frequency)
 
 
@@ -192,6 +195,8 @@ def process_folder_to_hdf5_video(
     *,
     instructions=None,
     frequency=15,
+    video_frames=None,
+    video_fps=30.0,
 ):
     pkl_files = []
     for fname in os.listdir(folder_path):
@@ -217,4 +222,6 @@ def process_folder_to_hdf5_video(
         video_path,
         instructions=instructions,
         frequency=frequency,
+        video_frames=video_frames,
+        video_fps=video_fps,
     )

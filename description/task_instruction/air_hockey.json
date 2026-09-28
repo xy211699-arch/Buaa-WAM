@@ -1,0 +1,6 @@
+{
+  "full_description": "Return the puck with the left arm, then return it with the right arm.",
+  "schema": "No placeholders. Arm names use the simulation world frame.",
+  "seen": ["Hit the puck with the left arm, then return it with the right arm."],
+  "unseen": ["Make a left-arm return followed by a right-arm return."]
+}
