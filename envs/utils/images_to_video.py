@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 import subprocess
+import shutil
 import pickle
 import pdb
 
@@ -15,9 +16,15 @@ def images_to_video(imgs: np.ndarray, out_path: str, fps: float = 30.0, is_rgb: 
         pixel_format = "rgb24" if is_rgb else "bgr24"
     else:
         pixel_format = "rgba"
+    executable = shutil.which('ffmpeg')
+    if executable is None:
+        # Some cluster nodes lack a system binary. The shared environment
+        # already includes imageio's bundled encoder; no installation needed.
+        from imageio_ffmpeg import get_ffmpeg_exe
+        executable = get_ffmpeg_exe()
     ffmpeg = subprocess.Popen(
         [
-            "ffmpeg",
+            executable,
             "-y",
             "-loglevel",
             "error",
