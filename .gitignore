@@ -42,3 +42,12 @@ outputs/direct_planner_stage5_v1_5/
 outputs/direct_planner_stage5_v1_5_parallel/
 outputs/**/*.mp4
 *.log
+
+# Local model artifacts and agent environment
+*.pt
+*.pth
+*.ckpt
+*.onnx
+.aws/
+.codex/
+.agents/

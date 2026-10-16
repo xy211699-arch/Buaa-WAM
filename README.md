@@ -1,391 +1,126 @@
-<h1 align="center">
-  <a href="https://robotwin-benchmark.github.io"><b>RoboTwin</b> Bimanual Robotic Manipulation Platform<br></a>
-</h1>
-<h2 align="center">Lastest Version: RoboTwin 2.0<br>🤲 <a href="https://robotwin-platform.github.io/">Webpage</a> | <a href="https://robotwin-platform.github.io/doc/">Document</a> | <a href="https://arxiv.org/abs/2506.18088">Paper</a> | <a href="https://robotwin-platform.github.io/doc/community/index.html">Community</a> | <a href="https://robotwin-platform.github.io/leaderboard">Leaderboard</a></h2>
+# BUAA-WAM · 气垫球联合世界模型实验
 
-https://private-user-images.githubusercontent.com/88101805/463126988-e3ba1575-4411-4a36-ad65-f0b2f49890c3.mp4
+**用未来球轨迹监督当前状态表示，让机器人直接生成击球动作。**
 
-**RoboTwin 2.0** (*ICML 2026*) — [Webpage](https://robotwin-platform.github.io/) · [Doc](https://robotwin-platform.github.io/doc) · [Paper](https://arxiv.org/abs/2506.18088) · [Talk](https://www.bilibili.com/video/BV18p3izYE63/?spm_id_from=333.337.search-card.all.click) · [机器之心](https://mp.weixin.qq.com/s/SwORezmol2Qd9YdrGYchEA) · [Leaderboard](https://robotwin-platform.github.io/leaderboard)
+基于 RoboTwin/SAPIEN 和双 UR5-WSG，验证 Fast-WAM 风格的联合训练能否改善气垫球控制。本分支包含模型、训练、仿真评测、测试和实验报告；数据、权重和视频不随代码上传。
 
-<details>
-<summary>Earlier papers & challenge report</summary>
+## 实验设计
 
-- **1.0 / Early** — RoboTwin: Dual-Arm Robot Benchmark with Generative Digital Twins · *CVPR 2025 (Highlight)* [PDF](https://arxiv.org/pdf/2504.13059) / [arXiv](https://arxiv.org/abs/2504.13059) · *ECCV Workshop 2024 (Best Paper)* [PDF](https://arxiv.org/pdf/2409.02920) / [arXiv](https://arxiv.org/abs/2409.02920)
-- **CVPR'25 MEIS Challenge Report** — [PDF](https://arxiv.org/pdf/2506.23351) / [arXiv](https://arxiv.org/abs/2506.23351) · [量子位](https://mp.weixin.qq.com/s/qxqs9vvvHsAJ-0hoYANYzQ)
+输入为过去 **0.4 秒的 9 帧 RGB**，以及当前机械臂的关节位置、速度和驱动目标差。冻结已训练的视觉定位前端，训练共享的当前状态编码器和三个输出分支。
 
-</details>
+```text
+历史 RGB ── 固定视觉前端 ──┐
+                          ├─ 当前状态编码器 C ─┬─ 动作策略 P
+当前机械臂状态 ────────────┘                   ├─ 专家未来轨迹 F
+                                              └─ 动作条件动力学 D
+```
 
-# BUAA WAM air hockey scene
+- **P：动作策略。** Flow Matching 生成接触延迟、目标 Y、期望球速、方向修正、速度倍率、控制提前量，现有 IK 与运动控制器负责执行。
+- **F：未来辅助监督。** 从当前表示预测专家行为下的球轨迹，改善动作策略读取的表示。
+- **D：动作条件预测。** 根据当前表示和已记录的执行指令，预测该动作后的球轨迹与击打接触。
 
-This fork includes a two-UR5 air hockey preview, the table/puck/striker definitions,
-interaction controls, tests, and the UR5-WSG model needed to run the preview.
-See [the scene guide](docs/air_hockey_assets.md) for controls and parameters.
+F/D 预测决策后 **1 秒、间隔 0.05 秒**的球 XY。未来标签只参与损失，不输入策略；非专家动作和失败轨迹只训练 D，不作为策略模仿标签。首版学习轨迹而非未来视频，不是完整 Fast-WAM 视频模型复现。
+
+## 运行流程
+
+```text
+专家回放到击球前准备状态
+  → 读取 RGB 历史与当前关节状态
+  → C 编码当前上下文
+  → P 用 4 步采样生成一套击球意图
+  → V4 来球预测为现有执行器提供接触参考
+  → 几何、时序与 IK 检查
+  → 左臂执行
+  → 确认左臂物理接触后，右臂专家回击
+  → 记录右臂接触后 1 秒并判定任务结果
+```
+
+策略本身不调用 F/D；现有执行桥接仍调用 V4 来球预测。当前是**专家准备状态中的一次接管**，右臂仍由专家控制，尚未实现从初始位姿自主双臂闭环控制。未接触、不可达和准备时间不足均保留为失败。
+
+## 对照与结果
+
+三组实验使用相同架构、数据和训练预算，各训练三个随机种子：
+
+| 训练方式 | 动作监督 | 未来监督 | 未来损失更新 C |
+| --- | --- | --- | --- |
+| 纯动作 | 是 | 否 | 否 |
+| 联合训练 | 是 | 是 | 是 |
+| 停止未来梯度 | 是 | 是 | 否 |
+
+同一组 15 个仿真场景的左臂真实接触结果：
+
+| 训练随机种子 | 纯动作 | 联合训练 | 停止未来梯度 |
+| --- | --- | --- | --- |
+| 42 | 11/15 | 12/15 | 11/15 |
+| 43 | 11/15 | 12/15 | 11/15 |
+| 44 | 9/15 | 7/15 | 9/15 |
+
+**总体持平，联合训练尚无稳定收益。** 第三个联合模型的八次失败均为准备时间不足。验证集选出的联合模型完成双臂 smoke test 2/3；当前默认 P2 模型保持不变。三个训练种子重复使用同一组场景，不是 45 个独立测试场景，也不是新场景泛化验证。
+
+模型可训练参数 **444,557**，在 RTX 4070 Laptop 8 GB 上完成训练。联合 seed42 直接策略推理 p95 约 **3.65 ms**，含 V4 参考生成约 **5.29 ms**；不包含相机、完整 IK 或右臂搜索。[完整结果与实验边界](docs/joint_policy_j1_results.md)
+
+## 代码结构
+
+| 路径 | 作用 |
+| --- | --- |
+| `world_model/model.py` | RGB 定位、自由运动预测和历史视觉编码 |
+| `world_model/joint_model.py` | 共享上下文、动作 Flow Matching、F/D 分支 |
+| `world_model/joint_data.py` | 决策相对时间监督、接触掩码与数据划分 |
+| `world_model/joint_inference.py` | 直接策略与现有执行器桥接 |
+| `envs/_air_hockey/` | 场景、物理、快照、IK、专家控制和录制 |
+| `scripts/*joint*.py` | 分支补采、联合训练与配对评测 |
+| `scripts/validate_hit_pipeline.py` | 完整双臂流程验证 |
+| `env_cfg/joint_air_hockey.yml` | 正式对照配置 |
+| `tests/` | 信息隔离、梯度、接触、数据与仿真回归 |
+
+## 环境与数据
+
+Python 3.10；依赖版本见 [`scripts/requirements.txt`](scripts/requirements.txt)，主要使用 SAPIEN 3.0.0b1、PyTorch 2.4.1、NumPy 1.26.4。仿真录制需要可用的 NVIDIA/Vulkan 环境。
 
 ```bash
+python -m pip install -r scripts/requirements.txt
 python scripts/preview_air_hockey_assets.py
 ```
 
-The other RoboTwin assets and datasets are not stored in this repository. Follow
-the upstream asset download instructions below to run the remaining benchmark tasks.
-Clone with `--recurse-submodules` to obtain XPolicyLab.
-Before using the full RoboTwin CuRobo planner, run
-`python scripts/update_embodiment_config_path.py` from the repository root to
-generate machine-specific embodiment paths from the included templates.
+训练使用原生气垫球 HDF5：同步的 20 Hz RGB/状态、关节读数、`control/` 驱动目标、专家计划、相机标定和物理接触记录。历史目录名 `data/real_buaa_wam_hf/data` 中本实验使用的是**仿真数据**。原生 `action` 表示下一时刻实测状态，不能当作控制目标。
 
-# 📚 Overview
+配置保留实验的历史运行路径。首次运行须先生成数据和前置 checkpoint，并更新对应 YAML 的 `data_root`、checkpoint 和分支目录；脚本会校验数据划分及 SHA256。[从采集到训练的准备步骤](docs/reproduce_joint_experiment.md)
 
-> Prefer the [RoboTwin Document](https://robotwin-platform.github.io/doc/) for full guides — this README is a quick start.
+## 训练与评测
 
-RoboTwin 2.0 and [RoboDojo](https://github.com/RoboDojo-Benchmark/RoboDojo) share deployment via [XPolicyLab](https://github.com/XPolicyLab/XPolicyLab): one policy-serving / eval stack across both benchmarks (single-task, multi-GPU, and remote server + local sim).
-
-**Default branch:** [`main`](https://github.com/RoboTwin-Platform/RoboTwin/tree/main) (RoboTwin 2.0).
-
-<details>
-<summary>Other branches (legacy / special-purpose)</summary>
-
-- [IsaacLab-Arena](https://github.com/RoboTwin-Platform/RoboTwin/tree/IsaacLab-Arena) · [RLinf_support](https://github.com/RoboTwin-Platform/RoboTwin/tree/RLinf_support) · [WBCD-2026](https://github.com/RoboTwin-Platform/RoboTwin/tree/WBCD-2026)
-- [RoboTwin-1.0](https://github.com/RoboTwin-Platform/RoboTwin/tree/RoboTwin-1.0) / [early_version](https://github.com/RoboTwin-Platform/RoboTwin/tree/early_version) · [gpt](https://github.com/RoboTwin-Platform/RoboTwin/tree/gpt)
-- [Challenge-Cup-2025](https://github.com/RoboTwin-Platform/RoboTwin/tree/Challenge-Cup-2025) · [CVPR-Challenge-2025-Round1](https://github.com/RoboTwin-Platform/RoboTwin/tree/CVPR-Challenge-2025-Round1) / [Round2](https://github.com/RoboTwin-Platform/RoboTwin/tree/CVPR-Challenge-2025-Round2)
-
-</details>
-
-# 🐣 Update
-* **2026/08/03**, We add [XPolicyLab](https://github.com/XPolicyLab/XPolicyLab)-based policy evaluation with single-task evaluation, multi-task multi-GPU scheduling, and remote policy-server/local-simulator deployment.
-* **2026/03/03**, We release [RMBench](https://github.com/RoboTwin-Platform/RMBench), which is a memory-dependent manipulation benchmark built upon RoboTwin 2.0.
-* **2026/02/20**, Usage supported in <a href="https://github.com/starVLA/starVLA">StarVLA</a>, which is a user-friendly codebase for VLA development.
-* **2026/01/23**, We update IsaacLab-Arena and <a href="https://github.com/RLinf/RLinf">RLinf</a> support (contributed by RLinf team).
-* **2025/08/28**, We update the RoboTwin 2.0 Paper [PDF](https://arxiv.org/pdf/2506.18088).
-* **2025/08/25**, We fix ACT deployment code and update the [leaderboard](https://robotwin-platform.github.io/leaderboard).
-* **2025/08/06**, We release RoboTwin 2.0 Leaderboard: [leaderboard website](https://robotwin-platform.github.io/leaderboard).
-* **2025/07/23**, RoboTwin 2.0 received Outstanding Poster at ChinaSI 2025 (Ranking 1st).
-* **2025/07/19**, We Fix DP3 evaluation code error. We will update RoboTwin 2.0 paper next week.
-* **2025/07/09**, We update endpose control mode, please see [[RoboTwin Doc - Usage - Control Robot](https://robotwin-platform.github.io/doc/usage/control-robot.html)] for more details.
-* **2025/07/08**, We upload [Challenge-Cup-2025](https://github.com/RoboTwin-Platform/RoboTwin/tree/Challenge-Cup-2025) Branch (第十九届挑战杯分支).
-* **2025/07/02**, Fix Piper Wrist Bug [[issue](https://github.com/RoboTwin-Platform/RoboTwin/issues/104)]. Please redownload the embodiment asset.
-* **2025/07/01**, We release Technical Report of RoboTwin Dual-Arm Collaboration Challenge @ CVPR 2025 MEIS Workshop [[arXiv](https://arxiv.org/abs/2506.23351)] !
-* **2025/06/21**, We release RoboTwin 2.0 [[Webpage](https://robotwin-platform.github.io/)] !
-* **2025/04/11**, RoboTwin is seclected as <i>CVPR Highlight paper</i>!
-* **2025/02/27**, RoboTwin is accepted to <i>CVPR 2025</i> ! 
-* **2024/09/30**, RoboTwin (Early Version) received <i>the Best Paper Award  at the ECCV Workshop</i>!
-* **2024/09/20**, Officially released RoboTwin.
-
-# 🛠️ Installation
-
-See [RoboTwin 2.0 Document (Usage - Install & Download)](https://robotwin-platform.github.io/doc/usage/robotwin-install.html) for installation instructions. It takes about 20 minutes for installation.
-
-XPolicyLab is embedded as a Git submodule. For a fresh checkout, clone RoboTwin recursively:
+准备好前置模型和分支数据后，在仓库根目录运行：
 
 ```bash
-git clone --recurse-submodules https://github.com/RoboTwin-Platform/RoboTwin.git
-cd RoboTwin
+# 三种训练方式 × 三个训练随机种子
+python scripts/train_joint_policy.py --config env_cfg/joint_air_hockey.yml --device cuda
+
+# 将 <training_run> 替换为本次训练输出目录
+python scripts/validate_joint_policy.py \
+  --training-run <training_run> --split val --episodes 5
+python scripts/validate_joint_policy.py \
+  --training-run <training_run> --split test --episodes 15
+
+# 完整双臂流程；模型先按验证集选择
+python scripts/validate_hit_pipeline.py \
+  --joint-checkpoint <training_run>/joint_seed42_best.pt \
+  --episodes 3 --selection bc --device cuda
 ```
 
-For an existing checkout, initialize the version pinned by RoboTwin:
+每次运行创建独立输出目录。模型和超参数只按验证集选择；真实接触与双臂任务成功分别统计。
+
+## 测试
 
 ```bash
-git submodule update --init --recursive XPolicyLab
+# 学习模块与数据契约；使用合成测试数据
+PYTHONPATH=. python -m unittest tests.test_joint_model \
+  tests.test_world_model_rgb tests.test_world_model_hit -v
+
+# 完整回归，需要已配置的仿真/GPU环境
+PYTHONPATH=. python -m unittest discover -s tests -v
 ```
 
-To pull the latest XPolicyLab commit on its configured `main` branch and refresh RoboTwin's submodule pin:
+实验阶段完整回归为 60 项：54 通过，6 条件跳过。GPU/viewer 条件跳过不代表相应功能已验证。
 
-```bash
-bash scripts/update_xpolicylab.sh
-# optional: stage the pin / reinstall the editable package
-bash scripts/update_xpolicylab.sh --stage --install
-```
+## 来源
 
-# 🤷‍♂️ Tasks Informations
-See [RoboTwin 2.0 Tasks Doc](https://robotwin-platform.github.io/doc/tasks/index.html) for more details.
-
-<p align="center">
-  <img src="./assets/files/50_tasks.gif" width="100%">
-</p>
-
-# 🧑🏻‍💻 Usage 
-
-## Document
-
-> Full usage details live in the [RoboTwin Document](https://robotwin-platform.github.io/doc/) — start from [Usage](https://robotwin-platform.github.io/doc/usage/index.html). Prefer the Doc over this README when anything conflicts.
-
-## Getting Data
-We provide over 100,000 pre-collected trajectories as part of the open-source release [RoboTwin Dataset](https://huggingface.co/datasets/TianxingChen/RoboTwin2.0/tree/main/dataset). **We recommend downloading the pre-collected data (step 1) as the default path** — it is ready to train on immediately. Collect data yourself (step 2) only when you need custom task configs, domain randomization, or embodiment setups.
-
-> **Always decode through `decode_image_bit`, and always encode through `encode_image_bit`.** Downloaded and self-collected episodes store cameras as encoded image bits. Decoding them yourself is unsupported, because they come in two byte formats and a hand-rolled decoder is right on one and reverses the channels on the other. A local copy of the pair is in [`data/decode_image_bit.py`](data/decode_image_bit.py) — it is the same functions as `XPolicyLab.utils.process_data`. Prefer the XPolicyLab import when the package is available:
->
-> ```python
-> from XPolicyLab.utils.process_data import decode_image_bit, encode_image_bit
-> rgb = decode_image_bit(image_bits)  # RGB for every data version
-> ```
->
-> Stored image bits come in two formats, and both decode to RGB:
->
-> | Format | How it was written | What a standard decoder sees |
-> | --- | --- | --- |
-> | **legacy** | an RGB array handed straight to `cv2.imencode`, which reads its input as BGR | red and blue swapped — the bytes are channel-reversed against the JPEG standard, and `cv2.imdecode` reverses them back |
-> | **standard** | `encode_image_bit`, which converts to BGR first and stamps a JPEG `COM` segment with the payload `XPL-RGB1` | correct colors |
->
-> Legacy data is never migrated — JPEG cannot swap channels losslessly — so the two formats coexist indefinitely and may appear in the same training run. Self-collected episodes now write the standard format. `decode_image_bit` tells the formats apart and returns RGB, so its output never needs a channel swap. Do **not** add `cv2.cvtColor(..., COLOR_BGR2RGB)` after it — the two formats are indistinguishable from any single sample, and that swap is the bug. Official LeRobot converters already call it; any custom training dataloader that reads these HDF5 files must do the same. Collection must not replace `encode_image_bit` with a bare `cv2.imencode`, which omits the marker and writes a buffer that reads back reversed. At eval time the policy server hands over decoded RGB, so `model.py` must not decode again. Details: [XPolicyLab — Decode only through `decode_image_bit`](https://github.com/XPolicyLab/XPolicyLab#decode-only-through-decode_image_bit).
-
-<img src="./assets/files/domain_randomization.png" alt="description" style="display: block; margin: auto; width: 100%;">
-
-## 1. Download XPolicyLab-Format Data (Recommended)
-Download and extract all available XPolicyLab-format trajectories from Hugging Face:
-
-```bash
-bash scripts/download_xpolicylab_data.sh
-```
-
-To download only selected tasks, pass their names:
-
-```bash
-bash scripts/download_xpolicylab_data.sh adjust_bottle beat_block_hammer
-```
-
-Downloads and extractions both run in parallel (defaults: 8 workers each). As soon as a task ZIP finishes downloading, extraction starts without waiting for the rest. Tune concurrency with:
-
-```bash
-# Parallel download / extract workers (extract defaults to HF_MAX_WORKERS)
-HF_MAX_WORKERS=8 HF_EXTRACT_WORKERS=16 bash scripts/download_xpolicylab_data.sh
-```
-
-Downloads land under `data/demo_clean/<task_name>/aloha_agilex/data/` (note: self-collected data lands under `data/<task_config>/...` instead).
-
-## 2. Task Running and Data Collection (Optional)
-For custom task configs, domain randomization, or embodiment setups, collect data yourself. The following command will first search for a random seed for the target collection quantity, and then replay the seed to collect data.
-
-```
-bash collect_data.sh ${task_name} ${task_config} ${gpu_id}
-# Example: bash collect_data.sh beat_block_hammer demo_randomized 0
-```
-
-Collected demonstrations are saved directly in the XPolicyLab trajectory format — no extra conversion step is needed:
-
-```text
-data/<task_config>/<task_name>/<embodiment>/data/episode_0000000.hdf5
-```
-
-`<embodiment>` follows the `embodiment` field of the task config (`aloha_agilex` for the default `aloha-agilex` setup).
-
-## 3. Convert to LeRobot (Optional)
-
-Many XPolicyLab policies train on LeRobot datasets. After you have XPolicyLab-format HDF5 under `data/<task_config>/<task>/<embodiment>/data/` (from download or collection), convert with the shared scripts in `XPolicyLab/scripts/`. Those scripts already decode through `decode_image_bit` — do not replace that with `cv2.imdecode` / PIL if you fork them. Stored bits come in two byte formats; only `decode_image_bit` tells them apart.
-
-Patterns are `<task_config>.<task>.<embodiment>` and may use `*` wildcards. They resolve against `data/` next to the RoboTwin root (for example `demo_clean.*.aloha_agilex`). Keep `--data_type` as the default `RoboDojo` — RoboTwin XPolicyLab trajectories share that HDF5 layout.
-
-Run in an environment that already has the matching LeRobot package (v2.1 vs v3.0). Conversion writes under `HF_LEROBOT_HOME` (default `~/.cache/huggingface/lerobot`); point it at a large disk if needed:
-
-```bash
-export HF_LEROBOT_HOME=/path/with/enough/space/lerobot
-
-# LeRobot v2.1 — all demo_clean tasks
-python XPolicyLab/scripts/transform_lerobot_v21_format.py \
-  "demo_clean.*.aloha_agilex" \
-  --repo_id robotwin_demo_clean_aloha_agilex \
-  --max_episode 50
-
-# LeRobot v3.0 — same selection
-python XPolicyLab/scripts/transform_lerobot_v30_format.py \
-  "demo_clean.*.aloha_agilex" \
-  --repo_id robotwin_demo_clean_aloha_agilex_v30 \
-  --max_episode 50
-
-# Single task
-python XPolicyLab/scripts/transform_lerobot_v21_format.py \
-  "demo_clean.beat_block_hammer.aloha_agilex" \
-  --repo_id beat_block_hammer_demo_clean
-```
-
-Useful flags: `--repo_id` (output dataset name), `--max_episode` (cap episodes per task/embodiment), `--resolution HxW` or `--image_height` / `--image_width` (default: auto-detect; RoboTwin is often `240x320`). Output lands at `${HF_LEROBOT_HOME}/<repo_id>`.
-
-## 4. Modify Task Config
-☝️ See [RoboTwin 2.0 Tasks Configurations Doc](https://robotwin-platform.github.io/doc/usage/configurations.html) for more details.
-
-Task settings such as `demo_clean` and `demo_randomized` are stored in `env_cfg/task_config/`.
-
-## 5. Evaluate Policies via XPolicyLab
-
-All evaluation goes through `scripts/eval_policy.sh`. The policy adapter must exist under `XPolicyLab/policy/<policy_name>/` (see the [XPolicyLab policy catalog](https://github.com/XPolicyLab/XPolicyLab/tree/main/policy)).
-
-`--env-cfg-type` selects the XPolicyLab action profile (validated against `XPolicyLab/utils/robot/_robot_info.json`; `arx_x5` matches RoboTwin's default aloha-agilex layout), while the simulator embodiment stays controlled by `--task-config`.
-
-**Local evaluation (multi-task, multi-GPU).** The scheduler starts a policy server and simulator per task on your GPU pool. Task lists and GPU settings live in `env_cfg/eval/all_tasks.yml` (trim `tasks` to a single entry for single-task evaluation):
-
-```bash
-bash scripts/eval_policy.sh multitask \
-  --config env_cfg/eval/all_tasks.yml \
-  --policy-name <policy_name> \
-  --ckpt-name <checkpoint> \
-  --env-cfg-type arx_x5 \
-  --policy-conda-env <policy_env> \
-  --eval-env-conda-env <robotwin_env> \
-  --action-type <action_type>
-```
-
-Add `--dry-run` to validate the schedule without launching anything. Results are written to `eval_result/multitask/` by default.
-
-**Split deployment (remote policy server + local simulator).** Start the server pool on the policy host, then point the local scheduler at it:
-
-```bash
-# On the policy-server host (fill in the placeholders first):
-bash scripts/eval_policy.sh serve --config env_cfg/eval/remote_server.yml
-
-# On the simulator host:
-bash scripts/eval_policy.sh multitask \
-  --config env_cfg/eval/all_tasks.yml \
-  --policy-name <policy_name> \
-  --env-cfg-type arx_x5 \
-  --eval-env-conda-env <robotwin_env> \
-  --enable-remote \
-  --policy-server-ip <server_ip> --policy-server-port <port>
-```
-
-`--policy-server-ip/--policy-server-port` can be repeated to use a server pool, or configured once via `enable_remote` / `policy_server_ip` / `policy_server_port` in the eval config.
-
-# 🏄‍♂️ Experiment & LeaderBoard
-
-> We recommend that the RoboTwin Platform can be used to explore the following topics: 
-> 1. single - task fine - tuning capability
-> 2. visual robustness
-> 3. language diversity robustness (language condition)
-> 4. multi-tasks capability
-> 5. cross-embodiment performance
-
-The full leaderboard and setting can be found in: [https://robotwin-platform.github.io/leaderboard](https://robotwin-platform.github.io/leaderboard).
-
-# 💽 Pre-collected Large-scale Dataset
-
-Please refer to [RoboTwin 2.0 Dataset - Huggingface](https://huggingface.co/datasets/TianxingChen/RoboTwin2.0/tree/main/dataset).
-
-# 🎯 Official Benchmark Checkpoints
-
-Please refer to [RoboTwin 2.0 Checkpoints - Huggingface](https://huggingface.co/datasets/TianxingChen/RoboTwin2.0/tree/main/cotrain_ckpt).
-
-# 👍 Citations
-If you find our work useful, please consider citing:
-
-<b>RoboTwin 2.0</b>: A Scalable Data Generator and Benchmark with Strong Domain Randomization for Robust Bimanual Robotic Manipulation
-```
-@article{chen2025robotwin,
-  title={Robotwin 2.0: A scalable data generator and benchmark with strong domain randomization for robust bimanual robotic manipulation},
-  author={Chen, Tianxing and Chen, Zanxin and Chen, Baijun and Cai, Zijian and Liu, Yibin and Li, Zixuan and Liang, Qiwei and Lin, Xianliang and Ge, Yiheng and Gu, Zhenyu and others},
-  journal={arXiv preprint arXiv:2506.18088},
-  year={2025}
-}
-```
-
-<b>RoboTwin</b>: Dual-Arm Robot Benchmark with Generative Digital Twins, accepted to <i style="color: red; display: inline;"><b>CVPR 2025 (Highlight)</b></i>
-```
-@InProceedings{Mu_2025_CVPR,
-    author    = {Mu, Yao and Chen, Tianxing and Chen, Zanxin and Peng, Shijia and Lan, Zhiqian and Gao, Zeyu and Liang, Zhixuan and Yu, Qiaojun and Zou, Yude and Xu, Mingkun and Lin, Lunkai and Xie, Zhiqiang and Ding, Mingyu and Luo, Ping},
-    title     = {RoboTwin: Dual-Arm Robot Benchmark with Generative Digital Twins},
-    booktitle = {Proceedings of the Computer Vision and Pattern Recognition Conference (CVPR)},
-    month     = {June},
-    year      = {2025},
-    pages     = {27649-27660}
-}
-```
-
-Benchmarking Generalizable Bimanual Manipulation: RoboTwin Dual-Arm Collaboration Challenge at CVPR 2025 MEIS Workshop
-```
-@article{chen2025benchmarking,
-  title={Benchmarking Generalizable Bimanual Manipulation: RoboTwin Dual-Arm Collaboration Challenge at CVPR 2025 MEIS Workshop},
-  author={Chen, Tianxing and Wang, Kaixuan and Yang, Zhaohui and Zhang, Yuhao and Chen, Zanxin and Chen, Baijun and Dong, Wanxi and Liu, Ziyuan and Chen, Dong and Yang, Tianshuo and others},
-  journal={arXiv preprint arXiv:2506.23351},
-  year={2025}
-}
-```
-
-<b>RoboTwin</b>: Dual-Arm Robot Benchmark with Generative Digital Twins (early version), accepted to <i style="color: red; display: inline;"><b>ECCV Workshop 2024 (Best Paper Award)</b></i>
-```
-@article{mu2024robotwin,
-  title={RoboTwin: Dual-Arm Robot Benchmark with Generative Digital Twins (early version)},
-  author={Mu, Yao and Chen, Tianxing and Peng, Shijia and Chen, Zanxin and Gao, Zeyu and Zou, Yude and Lin, Lunkai and Xie, Zhiqiang and Luo, Ping},
-  journal={arXiv preprint arXiv:2409.02920},
-  year={2024}
-}
-```
-
-# 😺 Acknowledgement
-
-**Software Support**: D-Robotics, **Hardware Support**: AgileX Robotics, **AIGC Support**: Deemos.
-
-Contact [Tianxing Chen](https://tianxingchen.github.io) if you have any questions or suggestions.
-
-# 🏷️ License
-This repository is released under the MIT license. See [LICENSE](./LICENSE) for additional details.
-
----
-
-## BUAA-WAM Air Hockey Research Pipeline
-
-This fork includes a two-UR5 air-hockey simulator expert and synchronized RGB/state data-collection pipeline.
-
-### Current entry points
-
-```text
-Expert planner:
-scripts/plan_direct_counterattack_stage5_v1_5.py
-
-Parallel collector:
-scripts/run_stage5_v1_5_parallel.py
-
-RGB/state recorder:
-scripts/collect_episode_rgb_auto_v1.py
-
-Collected-episode visualization:
-scripts/make_episode_preview.py
-```
-
-### Current pipeline
-
-```text
-randomized incoming puck
--> large-angle / spin / physics randomization
--> exact PhysX future rollout
--> bounce-aware contact-state generation
--> goal-conditioned direct counterattack search
--> IK / workspace feasibility
--> candidate forward simulation
--> restore exact initial state
--> execute selected BEST only
--> synchronized RGB + state recording
-```
-
-The planner is a privileged simulator expert. The intended learned policy later uses RGB history and robot proprioception rather than requiring puck ground truth at deployment.
-
-### Quick start
-
-```bash
-conda activate hockey
-
-PYTHONPATH=. python scripts/plan_direct_counterattack_stage5_v1_5.py \
-  --seed 6 --coarse-only --hold 50
-```
-
-Parallel expert-data collection:
-
-```bash
-PYTHONPATH=. python scripts/run_stage5_v1_5_parallel.py \
-  --seed-start 1 --num-seeds 8 --workers 4 --coarse-only --collect
-```
-
-Visualize the exact collected RGB trajectory:
-
-```bash
-EP=$(ls -dt outputs/episode_rgb_v1/episode_* | head -1)
-python scripts/make_episode_preview.py "$EP"
-```
-
-The recorder currently stores RGB at 640x360 and 30 FPS together with synchronized robot/puck state. Candidate-search rollouts are excluded from the expert demonstration timeline.
-
-Detailed documentation:
-
-```text
-docs/air_hockey_expert_pipeline.md
-```
-
-Incremental dependencies:
-
-```bash
-pip install -r requirements-air-hockey.txt
-```
+基于 [RoboTwin](https://github.com/RoboTwin-Platform/RoboTwin)，沿用 [MIT License](LICENSE)。联合训练的信息隔离设计参考 [Fast-WAM](https://arxiv.org/abs/2603.16666)；本文结果来自本仓库的小模型气垫球实验。

@@ -890,8 +890,15 @@ def evaluate_candidate(
     frame_sign=1.0,
     after_strike_handler=None,
     post_contact_seconds=None,
+    plan_only=False,
 ):
-    """Evaluate one explicit offensive intention: (t, goal target, desired puck speed)."""
+    """Evaluate one intention (time s, goal Y m, desired puck speed m/s).
+
+    With plan_only=True, restore initial_state and check geometry/timing/IK,
+    returning planned world-frame command fields without advancing physics.
+    The supplied puck_reference may be predicted rather than PhysX-derived.
+    Restoring the snapshot and resetting tool-follow statistics are side effects.
+    """
     restore_hit_state(assembly, initial_state)
     arm_side = "left" if frame_sign > 0 else "right"
     collector.reset_tool_follow_stats(arm_side)
@@ -1207,6 +1214,20 @@ def evaluate_candidate(
 
     contact_gate = contact_distance + 0.005
 
+    if plan_only:
+        # Use the supplied reference (which may be RGB-predicted) and current
+        # robot geometry to prepare a command without advancing simulation.
+        return {
+            "valid": True, "reason": "PLAN_ONLY", "arm": arm_side,
+            "coordinate_frame": "world" if frame_sign > 0 else "world_rotated_180deg_about_z",
+            "contact_time": float(contact_time), "contact_x": contact_x,
+            "contact_y": contact_y, "prep_time": prep_time,
+            "goal_target_y": float(goal_target_y), "desired_out_speed": float(desired_out_speed),
+            "attack_mode": attack_mode, "direction_correction_deg": float(direction_correction_deg),
+            "speed_scale": float(speed_scale), "command_lead_s": float(command_lead_s),
+            "nominal_theta_deg": float(np.rad2deg(nominal_theta)), "hit_speed": hit_speed,
+        }
+
     # --------------------------------------------------------
     # Phase A: move to the run-up point while puck is inbound.
     # Recorder calls are no-ops during hidden candidate search because the
@@ -1359,6 +1380,11 @@ def evaluate_candidate(
     }
 
     if after_strike_handler is not None:
+        if strike["physical_contact_local_time"] is None:
+            # A proximity gate can fire without a real collision. Never hand
+            # an unstruck inbound puck to the dual-arm continuation.
+            result.update(valid=False, reason="NO_PHYSICAL_CONTACT", score=-1e9)
+            return result
         # Continue from the actual left strike, before its old goal/timeout
         # rollout can consume the right arm's opportunity to intercept.
         result.update(after_strike_handler(result))

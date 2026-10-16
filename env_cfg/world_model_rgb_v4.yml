@@ -1,0 +1,25 @@
+data_root: data/real_buaa_wam_hf/data
+output_root: outputs/world_model_rgb_v4
+initial_checkpoint: outputs/world_model_rgb/run_20261010_172733_211291/best.pt
+freeze_localization: true
+split_seed: 42
+training_seed: 42
+dt_s: 0.05
+history_frames: 9
+horizon_steps: 20
+minimum_future_steps: 2
+contact_guard_s: 0.02
+image_width: 320
+image_height: 180
+xy_scale_m: [1.064, 0.609]
+model_type: spatial
+puck_plane_z_m: 0.75
+hidden_dim: 64
+localization_weight: 0.5
+heatmap_weight: 0.2
+batch_size: 16
+epochs: 20
+horizon_weight_growth: 0.0
+learning_rate: 0.0001
+weight_decay: 0.0001
+cpu_threads: 4

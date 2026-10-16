@@ -1,0 +1,18 @@
+source_checkpoint: outputs/world_model_hit_v3/run_20261011_163504_427151/robot_state_best.pt
+output_root: outputs/joint_air_hockey
+context_width: 128
+context_layers: 2
+batch_size: 8
+epochs: 100
+learning_rate: 0.0003
+weight_decay: 0.001
+training_seeds:
+- 42
+- 43
+- 44
+future_weight: 0.3
+dynamics_weight: 0.3
+contact_weight: 0.03
+sampling_steps: 4
+cpu_threads: 4
+extra_train_branch_root: outputs/joint_branch_data/finalized_20261013_175025

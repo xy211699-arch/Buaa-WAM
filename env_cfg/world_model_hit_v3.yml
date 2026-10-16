@@ -1,0 +1,28 @@
+data_root: data/real_buaa_wam_hf/data
+output_root: outputs/world_model_hit_v3
+backbone_checkpoint: outputs/world_model_rgb_v4/run_20261011_110219_093052/best.pt
+split_seed: 42
+training_seed: 42
+dt_s: 0.05
+history_frames: 9
+horizon_steps: 20
+contact_guard_s: 0.02
+decision_offsets_s:
+- 0.0
+- 0.05
+- 0.1
+- 0.15
+image_width: 320
+image_height: 180
+xy_scale_m:
+- 1.064
+- 0.609
+puck_plane_z_m: 0.75
+batch_size: 32
+epochs: 300
+learning_rate: 0.001
+weight_decay: 0.001
+cpu_threads: 4
+train_branch_root: outputs/hit_counterfactual/run_20261011_143952
+val_branch_root: outputs/hit_counterfactual/run_20261011_150349
+test_branch_root: outputs/hit_counterfactual/run_20261011_152824
