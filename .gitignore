@@ -30,6 +30,7 @@ envs/curobo/*
 
 /*.json*
 /*.txt
+!/requirements-dynamic-eval.txt
 outputs/
 *.pyc
 *.mp4

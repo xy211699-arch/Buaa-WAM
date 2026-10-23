@@ -1,0 +1,4 @@
+config:
+  robot: ur5_wsg_dual
+observation:
+  collect_freq: 30

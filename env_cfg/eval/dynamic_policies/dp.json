@@ -1,0 +1,11 @@
+{
+  "name": "DP",
+  "backend": "xpolicy_ws",
+  "endpoint": "ws://127.0.0.1:9002",
+  "artifact_id": "REPLACE_WITH_ACTUAL_ICE_HOCKEY_DP_CHECKPOINT_ID",
+  "training_data_id": "REPLACE_WITH_SHARED_TRAINING_DATASET_ID",
+  "training_seed": 0,
+  "action_semantics": "joint_drive_target",
+  "observation_history_frames": 3,
+  "request_timeout_s": 5.0
+}

@@ -1,0 +1,31 @@
+{
+  "seed": 20261023,
+  "repeats_per_cell": 20,
+  "speeds_m_s": [0.9, 1.05, 1.2],
+  "ttc_s": [0.8, 1.0, 1.1],
+  "controlled_side": "left",
+  "intercept_line_x_m": -0.6,
+  "return_line_x_m": 0.55,
+  "min_return_speed_m_s": 0.05,
+  "physics_dt_s": 0.001,
+  "observation_hz": 30,
+  "action_hz": 30,
+  "history_frames": 3,
+  "camera_width": 640,
+  "camera_height": 360,
+  "camera_aliases": {
+    "cam_head": "cam_head",
+    "cam_left_wrist": "cam_head",
+    "cam_right_wrist": "cam_head"
+  },
+  "replan_interval_s": 0.1,
+  "execution_steps": 6,
+  "episode_timeout_s": 5.0,
+  "policy_timeout_s": 5.0,
+  "extra_latency_s": 0.0,
+  "max_command_speed_rad_s": [3.14, 3.14, 3.14, 3.14, 3.14, 3.14],
+  "perturb_time_fraction": 0.25,
+  "perturb_delta_v_m_s": [-0.15, 0.20],
+  "reference_ttc_tolerance_s": 0.03,
+  "success_threshold": 0.8
+}

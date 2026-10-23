@@ -19,6 +19,10 @@
         "arm_dim": [6, 6],
         "ee_dim": [1, 1]
     },
+    "ur5_wsg_dual": {
+        "arm_dim": [6, 6],
+        "ee_dim": [2, 2]
+    },
     "dual_franka": {
         "arm_dim": [7, 7],
         "ee_dim": [1, 1]

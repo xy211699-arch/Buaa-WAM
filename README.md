@@ -17,6 +17,8 @@ https://private-user-images.githubusercontent.com/88101805/463126988-e3ba1575-44
 
 # BUAA WAM air hockey scene
 
+The dynamic policy benchmark (reaction-time curves, wall-bounce pairs, and velocity-perturbation pairs) has a separate model-free setup and a latency-aware evaluation entry point. See [dynamic air-hockey evaluation](docs/dynamic_air_hockey_evaluation.md). The code can be unit-tested without running a learned policy; actual model scores have not been validated by this addition.
+
 This fork includes a two-UR5 air hockey preview, the table/puck/striker definitions,
 interaction controls, tests, and the UR5-WSG model needed to run the preview.
 See [the scene guide](docs/air_hockey_assets.md) for controls and parameters.
